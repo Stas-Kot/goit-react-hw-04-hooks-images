@@ -14,10 +14,8 @@ export default function Modal({ largeImageURL, tags, onClose }) {
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    console.log('privet');
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      console.log('poka');
     };
   }, [onClose]);
 

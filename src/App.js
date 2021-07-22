@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer } from 'react-toastify';
 import 'react-loader-spinner/dist/loader/css/react-spinner-loader.css';
@@ -6,6 +6,12 @@ import styled from '@emotion/styled/macro';
 import Searchbar from 'components/Searchbar/Searchbar';
 import ImageGallery from 'components/ImageGallery/ImageGallery';
 import Modal from 'components/Modal/Modal';
+import { Spinner, SpinnerBottom } from 'components/Loader/Loader';
+import { toast } from 'react-toastify';
+import getImages from 'components/api/api';
+import Button from 'components/Button/Button';
+
+const per_page = 12;
 
 const Container = styled.div`
   display: grid;
@@ -15,11 +21,14 @@ const Container = styled.div`
 `;
 
 function App() {
-  const [searchQuery, setsearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [gallery, setGallery] = useState([]);
   const [activeImgIdx, setActiveImgIdx] = useState(0);
   const [page, setPage] = useState(1);
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState(null);
+  const [showBtnMore, setShowBtnMore] = useState(false);
 
   const toggleModal = () => {
     setShowModal(!showModal);
@@ -30,35 +39,69 @@ function App() {
     toggleModal();
   };
 
-  const handleNewFetch = hits => {
-    setGallery(hits);
-  };
-
-  const handleLoadMoreFetch = hits => {
-    setGallery(gallery => [...gallery, ...hits]);
-  };
-
   const onSubmit = query => {
-    setsearchQuery(query);
+    setSearchQuery(query);
     setPage(1);
   };
 
   const onLoadMore = () => {
     setPage(page => page + 1);
+    setStatus('pendingMore');
   };
+
+  useEffect(() => {
+    if (searchQuery === '') {
+      return;
+    }
+    setStatus('pending');
+    if (page === 1) {
+      setGallery([]);
+    }
+    getImages(searchQuery, page, per_page)
+      .then(data => {
+        if (data.totalHits === 0) {
+          toast.error(`No results were found for your query: ${searchQuery}`);
+          setStatus('idle');
+        } else if (page > data.totalHits / per_page) {
+          toast.error(`No more results for your query: ${searchQuery}`);
+          setStatus('resolved');
+          setShowBtnMore(false);
+        } else {
+          setGallery(prevHits => [...prevHits, ...data.hits]);
+          setStatus('resolved');
+          setShowBtnMore(true);
+        }
+      })
+      .catch(error => {
+        setError(error);
+        setStatus('rejected');
+      });
+  }, [searchQuery, page]);
+
+  useEffect(() => {
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: 'smooth',
+    });
+  }, [gallery]);
+
+  if (status === 'rejected') {
+    toast.error(`${error.message}`);
+    return <h1>{error.message}</h1>;
+  }
 
   return (
     <Container>
       <Searchbar handleSubmit={onSubmit} />
       <ImageGallery
-        query={searchQuery}
+        gallery={gallery}
         handleModal={toggleModal}
         handeleActiveIdx={updateActiveImgIdx}
-        onNewFetch={handleNewFetch}
-        onLoadMoreFetch={handleLoadMoreFetch}
-        currentPage={page}
         onLoadMore={onLoadMore}
       />
+      {status === 'resolved' && showBtnMore && <Button onClick={onLoadMore} />}
+      {status === 'pending' && <Spinner />}
+      {status === 'pendingMore' && <SpinnerBottom />}
       <ToastContainer autoClose={3000} />
       {showModal && (
         <Modal
@@ -70,73 +113,5 @@ function App() {
     </Container>
   );
 }
-
-// class App extends Component {
-//   state = {
-//     searchQuery: '',
-//     showModal: false,
-//     gallery: null,
-//     activeImgIdx: 0,
-//     page: 1,
-//   };
-
-//   setActiveImgIdx = index => {
-//     this.setState({ activeImgIdx: index });
-//     this.toggleModal();
-//   };
-
-// handleNewFetch = hits => {
-//   this.setState({ gallery: hits });
-// };
-
-//   handleLoadMoreFetch = hits => {
-//     this.setState(prevState => ({
-//       gallery: [...prevState.gallery, ...hits],
-//     }));
-//   };
-
-//   onSubmit = query => {
-//     this.setState({ searchQuery: query, page: 1 });
-//   };
-
-// toggleModal = () => {
-//   this.setState(({ showModal }) => ({
-//     showModal: !showModal,
-//   }));
-// };
-
-//   onLoadMore = () => {
-//     this.setState(prevState => ({
-//       page: prevState.page + 1,
-//     }));
-//   };
-
-//   render() {
-//     return (
-//       <Container>
-//         <Searchbar handleSubmit={this.onSubmit} />
-//         <ImageGallery
-//           query={this.state.searchQuery}
-//           handleModal={this.toggleModal}
-//           handeleActiveIdx={this.setActiveImgIdx}
-//           onNewFetch={this.handleNewFetch}
-//           onLoadMoreFetch={this.handleLoadMoreFetch}
-//           currentPage={this.state.page}
-//           onLoadMore={this.onLoadMore}
-//         />
-//         <ToastContainer autoClose={3000} />
-//         {this.state.showModal && (
-//           <Modal
-//             tags={this.state.gallery[this.state.activeImgIdx].tags}
-//             onClose={this.toggleModal}
-//             largeImageURL={
-//               this.state.gallery[this.state.activeImgIdx].largeImageURL
-//             }
-//           />
-//         )}
-//       </Container>
-//     );
-//   }
-// }
 
 export default App;
